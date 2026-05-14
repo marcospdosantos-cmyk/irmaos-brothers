@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Irmãos Brothers</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -12,6 +15,20 @@ body { background:#000; display:flex; flex-direction:column; align-items:center;
 #pauseBtn { background:none; border:1px solid #FFD700; color:#FFD700; font-family:'Courier New',monospace; font-size:11px; padding:5px 12px; cursor:pointer; letter-spacing:1px; border-radius:3px; touch-action:manipulation; }
 #gameWrap { position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; touch-action:none; max-width:100%; }
+/* iOS banner */
+#iosBanner { display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1200; border-top:1px solid #FFD700; color:#FFD700; font-family:'Courier New',monospace; font-size:10px; letter-spacing:1px; padding:8px 16px; z-index:999; align-items:center; justify-content:space-between; gap:8px; text-align:left; }
+#iosBanner span { flex:1; line-height:1.6; }
+#iosBanner button { background:none; border:1px solid #FFD700; color:#FFD700; font-size:12px; padding:2px 8px; cursor:pointer; border-radius:3px; flex-shrink:0; }
+/* Botão throw mobile */
+#throwBtn { display:none; position:absolute; bottom:14px; right:14px; z-index:10;
+  background:#7b4000; border:2px solid #e67e22; color:#fff;
+  font-family:'Courier New',monospace; font-size:11px; letter-spacing:1px;
+  width:70px; height:70px; border-radius:12px; cursor:pointer; touch-action:none;
+  flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  -webkit-tap-highlight-color:transparent; user-select:none; }
+#throwBtn .t-icon { font-size:24px; line-height:1; }
+#throwBtn.pressed { background:#a05500; border-color:#f39c12; }
+@media (pointer:coarse) { #throwBtn { display:flex; } }
 #overlay, #gameoverOverlay {
   position:absolute; inset:0; background:rgba(0,0,0,.95);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -149,6 +166,9 @@ canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; 
         <div id="goRankingList"></div>
       </div>
     </div>
+
+    <!-- Botão throw mobile -->
+    <button id="throwBtn"><span class="t-icon">🍟</span><small>JOGAR</small></button>
   </div>
 
   <!-- Controles touch -->
@@ -163,6 +183,12 @@ canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; 
       <button id="bJump">▲<br><small>PULAR</small></button>
     </div>
   </div>
+</div>
+
+<!-- iOS fullscreen banner -->
+<div id="iosBanner">
+  <span>📱 <strong>TELA CHEIA:</strong> toque em <strong>⎙</strong> → "Adicionar à Tela de Início"</span>
+  <button onclick="this.parentElement.style.display='none'">✕</button>
 </div>
 
 <script>
@@ -1363,7 +1389,7 @@ function draw() {
     ctx.globalAlpha = 0.18;
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('↑ ↓', W * 0.25, H - 14);
+    ctx.fillText('↕ DESLIZE', W * 0.25, H - 14);
     ctx.fillText('◀', W * 0.625, H - 14);
     ctx.fillText('▶', W * 0.875, H - 14);
     ctx.textAlign = 'left';
@@ -1506,6 +1532,26 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 
 requestAnimationFrame(loop);
 
+// ─── THROW BUTTON (mobile) ───────────────────────────────────
+{
+  const tb = document.getElementById('throwBtn');
+  tb.addEventListener('pointerdown', e => {
+    e.preventDefault(); tb.setPointerCapture(e.pointerId);
+    touch.t = true; tb.classList.add('pressed');
+  });
+  tb.addEventListener('pointerup',     () => { touch.t = false; tb.classList.remove('pressed'); });
+  tb.addEventListener('pointercancel', () => { touch.t = false; tb.classList.remove('pressed'); });
+}
+
+// ─── iOS FULLSCREEN BANNER ────────────────────────────────────
+(function() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone === true;
+  if (isIOS && !isStandalone) {
+    document.getElementById('iosBanner').style.display = 'flex';
+  }
+})();
+
 // ─── CANVAS TOUCH ZONES ──────────────────────────────────────
 // Polegar esquerdo (lado esq, < 50%): pulo
 // Polegar direito (lado dir, >= 50%): 50-75% = mover esquerda | 75-100% = mover direita
@@ -1524,27 +1570,29 @@ requestAnimationFrame(loop);
     e.preventDefault();
     canvas.setPointerCapture(e.pointerId);
     const zone = getZone(e.clientX);
-    cT[e.pointerId] = { zone, startY: e.clientY, crouching: false };
-    if (zone === 'jump') {
-      touch.j = true;
-    } else {
-      touch[zone] = true;
-    }
+    cT[e.pointerId] = { zone, startY: e.clientY, triggered: false };
+    if (zone !== 'jump') touch[zone] = true;
   }, { passive: false });
 
   canvas.addEventListener('pointermove', e => {
     const t = cT[e.pointerId];
     if (!t) return;
 
-    // Deslize para baixo na zona de pulo → agachar
-    if (t.zone === 'jump' && !t.crouching && e.clientY - t.startY >= 20) {
-      t.crouching = true;
-      touch.j = false;
-      touch.d = true;
+    if (t.zone === 'jump') {
+      if (t.triggered) return;
+      const dy = e.clientY - t.startY;
+      if (dy <= -25) {          // deslize para CIMA → pular
+        t.triggered = true;
+        touch.j = true;
+        setTimeout(() => { touch.j = false; }, 200);
+      } else if (dy >= 25) {   // deslize para BAIXO → agachar
+        t.triggered = true;
+        t.crouching = true;
+        touch.d = true;
+      }
       return;
     }
-
-    if (t.zone === 'jump') return; // esquerda só controla pulo/agachar via swipe
+    // Zona direita: muda direção conforme posição do dedo
     const newZone = getZone(e.clientX);
     if (newZone === t.zone || newZone === 'jump') return;
     touch[t.zone] = false;
@@ -1554,9 +1602,12 @@ requestAnimationFrame(loop);
 
   function releaseTouch(t) {
     if (!t) return;
-    if (t.crouching) { touch.d = false; }
-    else if (t.zone === 'jump') { touch.j = false; }
-    else { touch[t.zone] = false; }
+    if (t.zone === 'jump') {
+      if (t.crouching) touch.d = false;
+      touch.j = false;
+    } else {
+      touch[t.zone] = false;
+    }
   }
 
   canvas.addEventListener('pointerup', e => {
