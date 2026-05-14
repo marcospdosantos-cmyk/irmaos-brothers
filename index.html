@@ -19,16 +19,24 @@ canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; 
 #iosBanner { display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1200; border-top:1px solid #FFD700; color:#FFD700; font-family:'Courier New',monospace; font-size:10px; letter-spacing:1px; padding:8px 16px; z-index:999; align-items:center; justify-content:space-between; gap:8px; text-align:left; }
 #iosBanner span { flex:1; line-height:1.6; }
 #iosBanner button { background:none; border:1px solid #FFD700; color:#FFD700; font-size:12px; padding:2px 8px; cursor:pointer; border-radius:3px; flex-shrink:0; }
-/* Botão throw mobile */
-#throwBtn { display:none; position:absolute; bottom:14px; right:14px; z-index:10;
-  background:#7b4000; border:2px solid #e67e22; color:#fff;
-  font-family:'Courier New',monospace; font-size:11px; letter-spacing:1px;
-  width:70px; height:70px; border-radius:12px; cursor:pointer; touch-action:none;
-  flex-direction:column; align-items:center; justify-content:center; gap:2px;
-  -webkit-tap-highlight-color:transparent; user-select:none; }
-#throwBtn .t-icon { font-size:24px; line-height:1; }
-#throwBtn.pressed { background:#a05500; border-color:#f39c12; }
-@media (pointer:coarse) { #throwBtn { display:flex; } }
+/* Controles mobile overlay */
+#mc { display:none; position:absolute; bottom:0; left:0; right:0;
+  padding:10px 14px; justify-content:space-between; align-items:flex-end;
+  pointer-events:none; z-index:5; }
+.mc-grp { display:flex; gap:8px; pointer-events:auto; }
+#mc button {
+  background:rgba(0,0,0,0.50); border:2px solid rgba(255,255,255,0.25); color:#fff;
+  font-family:'Courier New',monospace; border-radius:50%;
+  width:66px; height:66px; font-size:24px;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  cursor:pointer; user-select:none; touch-action:none;
+  -webkit-tap-highlight-color:transparent; gap:2px; }
+#mc button.pressed { background:rgba(255,255,255,0.18); border-color:rgba(255,255,255,0.7); }
+#mcJump { background:rgba(120,0,0,0.65) !important; border-color:rgba(192,57,43,0.7) !important;
+  width:74px !important; height:74px !important; }
+#mcThrow { background:rgba(100,50,0,0.65) !important; border-color:rgba(230,126,34,0.7) !important; }
+#mcDown { font-size:18px !important; }
+@media (pointer:coarse) { #mc { display:flex; } }
 #overlay, #gameoverOverlay {
   position:absolute; inset:0; background:rgba(0,0,0,.95);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -167,8 +175,18 @@ canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; 
       </div>
     </div>
 
-    <!-- Botão throw mobile -->
-    <button id="throwBtn"><span class="t-icon">🍟</span><small>JOGAR</small></button>
+    <!-- Controles mobile overlay -->
+    <div id="mc">
+      <div class="mc-grp">
+        <button id="mcL">◀</button>
+        <button id="mcR">▶</button>
+      </div>
+      <div class="mc-grp">
+        <button id="mcDown">↓<br><small style="font-size:8px;letter-spacing:1px">AGACHAR</small></button>
+        <button id="mcThrow">🍟<br><small style="font-size:8px;letter-spacing:1px">JOGAR</small></button>
+        <button id="mcJump">↑<br><small style="font-size:9px;letter-spacing:1px">PULAR</small></button>
+      </div>
+    </div>
   </div>
 
   <!-- Controles touch -->
@@ -1532,16 +1550,22 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 
 requestAnimationFrame(loop);
 
-// ─── THROW BUTTON (mobile) ───────────────────────────────────
-{
-  const tb = document.getElementById('throwBtn');
-  tb.addEventListener('pointerdown', e => {
-    e.preventDefault(); tb.setPointerCapture(e.pointerId);
-    touch.t = true; tb.classList.add('pressed');
+// ─── CONTROLES MOBILE OVERLAY ────────────────────────────────
+function addMcBtn(id, prop) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    touch[prop] = true; el.classList.add('pressed');
   });
-  tb.addEventListener('pointerup',     () => { touch.t = false; tb.classList.remove('pressed'); });
-  tb.addEventListener('pointercancel', () => { touch.t = false; tb.classList.remove('pressed'); });
+  el.addEventListener('pointerup',     () => { touch[prop] = false; el.classList.remove('pressed'); });
+  el.addEventListener('pointercancel', () => { touch[prop] = false; el.classList.remove('pressed'); });
 }
+addMcBtn('mcL',    'l');
+addMcBtn('mcR',    'r');
+addMcBtn('mcDown', 'd');
+addMcBtn('mcJump', 'j');
+addMcBtn('mcThrow','t');
 
 // ─── iOS FULLSCREEN BANNER ────────────────────────────────────
 (function() {
@@ -1552,9 +1576,8 @@ requestAnimationFrame(loop);
   }
 })();
 
-// ─── CANVAS TOUCH ZONES ──────────────────────────────────────
-// Polegar esquerdo (lado esq, < 50%): pulo
-// Polegar direito (lado dir, >= 50%): 50-75% = mover esquerda | 75-100% = mover direita
+// ─── CANVAS TOUCH ZONES (backup para área sem botões) ────────
+// O canvas captura toques apenas na área acima dos botões overlay
 {
   const cT = {}; // pointerId → { zone }
 
